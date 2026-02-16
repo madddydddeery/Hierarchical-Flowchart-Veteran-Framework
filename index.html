@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>Veteran Service Pathways (Interactive)</title>
+<style>
+:root{--bg:#0b0f17;--panel:#0f1626;--panel2:#101a2e;--text:#e8eefc;--muted:rgba(232,238,252,.72);--border:rgba(255,255,255,.12);}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+.topbar{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.title{font-weight:800;letter-spacing:.2px}
+.subtitle{font-size:13px;color:var(--muted)}
+.wrap{display:grid;grid-template-columns: 420px 1fr; height: calc(100vh - 56px);}
+.sidebar{border-right:1px solid var(--border); padding:12px; overflow:auto; background: linear-gradient(180deg, var(--panel), var(--panel2));}
+.main{position:relative; overflow:auto; padding:12px}
+.card{background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:14px; padding:12px; margin-bottom:10px}
+.card h3{margin:0 0 8px 0;font-size:13px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.6px}
+.controls{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+button{background:rgba(255,255,255,.08); border:1px solid var(--border); color:var(--text); border-radius:12px; padding:8px 10px; cursor:pointer; font-weight:650; font-size:13px}
+button:hover{background:rgba(255,255,255,.12)}
+button.primary{background:rgba(96,165,250,.18);border-color:rgba(96,165,250,.30)}
+button.primary:hover{background:rgba(96,165,250,.26)}
+input[type="search"]{width:100%; padding:9px 10px; border-radius:12px; outline:none; background:rgba(255,255,255,.06); border:1px solid var(--border); color:var(--text)}
+.small{font-size:12px;color:var(--muted)}
+.pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.pill{font-size:12px;padding:4px 8px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,.06)}
+.sel{display:grid; gap:10px}
+.sel label{font-size:12px;color:var(--muted); display:block; margin-bottom:6px}
+select{width:100%; min-height: 150px; padding:8px; border-radius:12px; background:rgba(255,255,255,.06); border:1px solid var(--border); color:var(--text);}
+option{padding:4px}
+.kpi{display:flex;gap:10px;flex-wrap:wrap}
+.kpi .pill{background:rgba(96,165,250,.12);border-color:rgba(96,165,250,.28)}
+svg{display:block}
+.node{cursor:pointer}
+.node rect{rx:10; ry:10; stroke:rgba(255,255,255,.18); stroke-width:1.2; pointer-events:all}
+.node text{font-size:12px; fill:#0b0f17; font-weight:750; pointer-events:none}
+.edge{fill:none; stroke-width:3.0}
+.edge.faded{stroke:rgba(255,255,255,.08)!important; stroke-width:2}
+.node.faded{opacity:.18}
+.node.active rect{stroke:rgba(255,255,255,.92); stroke-width:2.8}
+.colHeader{font-size:12px; fill:rgba(232,238,252,.78); font-weight:750; letter-spacing:.5px}
+.debug{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;line-height:1.35;color:rgba(232,238,252,.82);white-space:pre-wrap}
+.footerhint{position:absolute; right:14px; bottom:10px; font-size:12px; color:var(--muted)}
+.banner{margin-top:6px;font-size:12px;color:rgba(34,197,94,.92)}
+</style>
+</head>
+<body>
+<div class="topbar">
+<div class="title">Australian Veteran Psychosocial Health Service Pathways</div>
+<div class="subtitle" id="viewLabel">Collapsed view (drill)</div>
+</div>
+<div class="wrap">
+<aside class="sidebar">
+
+<div class="card">
+<h3>View</h3>
+<div class="controls">
+<button class="primary" id="collapsedBtn">Collapsed (drill)</button>
+<button class="primary" id="expandedBtn">Fully expanded</button>
+</div>
+</div>
+<div class="card">
+<h3>Active filters</h3>
+<div class="kpi">
+<span class="pill">Rows: <span id="kpi_rows">0</span></span>
+<span class="pill">Unique pathways: <span id="kpi_paths">0</span></span>
+</div>
+<div class="pills" id="activePills"></div>
+<div class="controls" style="margin-top:10px">
+<button id="clearBtn">Reset slicers</button>
+</div>
+</div>
+
+<div class="card">
+<h3>Slicers</h3>
+<div class="sel" id="slicerWrap"></div>
+</div>
+</aside>
+<main class="main" id="mainPane">
+<svg aria-label="Interactive framework diagram" id="viz" role="img"></svg>
+<div class="footerhint" id="hint"></div>
+</main>
+</div>
+<script>
+const RAW = [{"Major Funder": "Commonwealth Government", "Provider": "Indigenous Australians Health Programme", "Service Type": "Aboriginal Community Controlled Health Services", "Service Sector": "Primary care and private clinical ambulatory services", "_path_id": "1"}, {"Major Funder": "Commonwealth Government", "Provider": "Medicare Benefits Scheme", "Service Type": "Aboriginal Community Controlled Health Services", "Service Sector": "Primary care and private clinical ambulatory services", "_path_id": "2"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Health, Disability, and Ageing", "Service Type": "Access to Allied Psychological Services (ATAPS)", "Service Sector": "Primary care and private clinical ambulatory services", "_path_id": "3"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Health, Disability, and Ageing", "Service Type": "Access to Allied Psychological Services (ATAPS)", "Service Sector": "Psychosocial Support Services", "_path_id": "4"}, {"Major Funder": "Commonwealth Government", "Provider": "Primary Health Networks", "Service Type": "Access to Allied Psychological Services (ATAPS)", "Service Sector": "Primary care and private clinical ambulatory services", "_path_id": "5"}, {"Major Funder": "Commonwealth Government", "Provider": "Primary Health Networks", "Service Type": "Access to Allied Psychological Services (ATAPS)", "Service Sector": "Psychosocial Support Services", "_path_id": "6"}, {"Major Funder": "State and Territory Governments", "Provider": "State and Territory Department of Health", "Service Type": "Access to Allied Psychological Services (ATAPS)", "Service Sector": "Primary care and private clinical ambulatory services", "_path_id": "7"}, {"Major Funder": "State and Territory Governments", "Provider": "State and Territory Department of Health", "Service Type": "Access to Allied Psychological Services (ATAPS)", "Service Sector": "Psychosocial Support Services", "_path_id": "8"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Defense", "Service Type": "Australian Defence Force Telephone Counselling, Self-help, and Online based Crisis Services", "Service Sector": "Psychosocial Support Services", "_path_id": "9"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Defense", "Service Type": "Australian Defence Force Telephone Counselling, Self-help, and Online based Crisis Services", "Service Sector": "Psychosocial Support Services", "_path_id": "10"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Community Donations and Philanthropy", "Service Type": "Community-based Mental Health Services", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "16"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Consumer Out-of-Pocket", "Service Type": "Community-based Mental Health Services", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "20"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Health, Disability, and Ageing", "Service Type": "Community-based Mental Health Services", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "12"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Veteran Affairs", "Service Type": "Community-based Mental Health Services", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "17"}, {"Major Funder": "State and Territory Governments", "Provider": "Local Hospital Networks", "Service Type": "Community-based Mental Health Services", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "15"}, {"Major Funder": "Commonwealth Government", "Provider": "Medicare Benefits Scheme", "Service Type": "Community-based Mental Health Services", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "11"}, {"Major Funder": "Commonwealth Government", "Provider": "National Disability Insurance Agency", "Service Type": "Community-based Mental Health Services", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "18"}, {"Major Funder": "State and Territory Governments", "Provider": "National Disability Insurance Agency", "Service Type": "Community-based Mental Health Services", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "19"}, {"Major Funder": "Commonwealth Government", "Provider": "Primary Health Networks", "Service Type": "Community-based Mental Health Services", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "13"}, {"Major Funder": "State and Territory Governments", "Provider": "State and Territory Department of Health", "Service Type": "Community-based Mental Health Services", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "14"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Infrastructure, Transport, Regional Development, Communications and the Arts", "Service Type": "Emergency Service Connection", "Service Sector": "Not Classified", "_path_id": "21"}, {"Major Funder": "State and Territory Governments", "Provider": "State and Territory Emergency Services", "Service Type": "Emergency Service Connection", "Service Sector": "Not Classified", "_path_id": "22"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Consumer Out-of-Pocket", "Service Type": "General Practitioner", "Service Sector": "Primary care and private clinical ambulatory services", "_path_id": "25"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Veteran Affairs", "Service Type": "General Practitioner", "Service Sector": "Primary care and private clinical ambulatory services", "_path_id": "24"}, {"Major Funder": "Commonwealth Government", "Provider": "Medicare Benefits Scheme", "Service Type": "General Practitioner", "Service Sector": "Primary care and private clinical ambulatory services", "_path_id": "23"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Health, Disability, and Ageing", "Service Type": "Headspace", "Service Sector": "Psychosocial Support Services", "_path_id": "75"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Health, Disability, and Ageing", "Service Type": "Headspace", "Service Sector": "Primary care and private clinical ambulatory services", "_path_id": "76"}, {"Major Funder": "Commonwealth Government", "Provider": "Medicare Benefits Scheme", "Service Type": "Headspace", "Service Sector": "Primary care and private clinical ambulatory services", "_path_id": "26"}, {"Major Funder": "Commonwealth Government", "Provider": "Medicare Benefits Scheme", "Service Type": "Headspace", "Service Sector": "Psychosocial Support Services", "_path_id": "27"}, {"Major Funder": "Commonwealth Government", "Provider": "Primary Health Networks", "Service Type": "Headspace", "Service Sector": "Primary care and private clinical ambulatory services", "_path_id": "28"}, {"Major Funder": "Commonwealth Government", "Provider": "Primary Health Networks", "Service Type": "Headspace", "Service Sector": "Psychosocial Support Services", "_path_id": "29"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Consumer Out-of-Pocket", "Service Type": "Hospital Admitted Mental Health Care", "Service Sector": "Bed-based Service", "_path_id": "36"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Defense", "Service Type": "Hospital Admitted Mental Health Care", "Service Sector": "Bed-based Service", "_path_id": "32"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Veteran Affairs", "Service Type": "Hospital Admitted Mental Health Care", "Service Sector": "Psychosocial Support Services", "_path_id": "31"}, {"Major Funder": "State and Territory Governments", "Provider": "Local Hospital Networks", "Service Type": "Hospital Admitted Mental Health Care", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "35"}, {"Major Funder": "Commonwealth Government", "Provider": "Medicare Benefits Scheme", "Service Type": "Hospital Admitted Mental Health Care", "Service Sector": "Bed-based Service", "_path_id": "30"}, {"Major Funder": "Commonwealth Government", "Provider": "Private Insurers", "Service Type": "Hospital Admitted Mental Health Care", "Service Sector": "Bed-based Service", "_path_id": "33"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Private Insurers", "Service Type": "Hospital Admitted Mental Health Care", "Service Sector": "Bed-based Service", "_path_id": "34"}, {"Major Funder": "State and Territory Governments", "Provider": "Local Hospital Networks", "Service Type": "Hospital Non-admitted/Outpatient", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "40"}, {"Major Funder": "Commonwealth Government", "Provider": "Medicare Benefits Scheme", "Service Type": "Hospital Non-admitted/Outpatient", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "37"}, {"Major Funder": "Commonwealth Government", "Provider": "Private Insurers", "Service Type": "Hospital Non-admitted/Outpatient", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "38"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Private Insurers", "Service Type": "Hospital Non-admitted/Outpatient", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "39"}, {"Major Funder": "Commonwealth Government", "Provider": "Attorney General’s Department", "Service Type": "Legal and Complaints Service", "Service Sector": "Psychosocial Support Services", "_path_id": "41"}, {"Major Funder": "State and Territory Governments", "Provider": "State and Territory Department of Justice", "Service Type": "Legal and Complaints Service", "Service Sector": "Psychosocial Support Services", "_path_id": "42"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Consumer Out-of-Pocket", "Service Type": "Mental Health Day Programs", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "49"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Health, Disability, and Ageing", "Service Type": "Mental Health Day Programs", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "43"}, {"Major Funder": "State and Territory Governments", "Provider": "Local Hospital Networks", "Service Type": "Mental Health Day Programs", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "48"}, {"Major Funder": "Commonwealth Government", "Provider": "National Disability Insurance Agency", "Service Type": "Mental Health Day Programs", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "44"}, {"Major Funder": "State and Territory Governments", "Provider": "National Disability Insurance Agency", "Service Type": "Mental Health Day Programs", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "45"}, {"Major Funder": "Commonwealth Government", "Provider": "Private Insurers", "Service Type": "Mental Health Day Programs", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "46"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Private Insurers", "Service Type": "Mental Health Day Programs", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "47"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Veteran Affairs", "Service Type": "Open Arms", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "50"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Consumer Out-of-Pocket", "Service Type": "Prescription Medication†", "Service Sector": "Pharmaceutical / Medicines Supply Service", "_path_id": "73"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Veteran Affairs", "Service Type": "Prescription Medication†", "Service Sector": "Pharmaceutical / Medicines Supply Service", "_path_id": "52"}, {"Major Funder": "Commonwealth Government", "Provider": "Pharmaceutical Benefits Scheme", "Service Type": "Prescription Medication†", "Service Sector": "Pharmaceutical / Medicines Supply Service", "_path_id": "51"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Private Insurers", "Service Type": "Prescription Medication†", "Service Sector": "Pharmaceutical / Medicines Supply Service", "_path_id": "74"}, {"Major Funder": "State and Territory Governments", "Provider": "Local Hospital Networks", "Service Type": "Residential Mental Health Care", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "53"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Community Donations and Philanthropy", "Service Type": "Telephone Counselling, Self-help, and Online Based Support Service/Program", "Service Sector": "Psychosocial Support Services", "_path_id": "58"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Health, Disability, and Ageing", "Service Type": "Telephone Counselling, Self-help, and Online Based Support Service/Program", "Service Sector": "Psychosocial Support Services", "_path_id": "54"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Social Services", "Service Type": "Telephone Counselling, Self-help, and Online Based Support Service/Program", "Service Sector": "Psychosocial Support Services", "_path_id": "55"}, {"Major Funder": "Commonwealth Government", "Provider": "Government Grants and Contracts", "Service Type": "Telephone Counselling, Self-help, and Online Based Support Service/Program", "Service Sector": "Psychosocial Support Services", "_path_id": "56"}, {"Major Funder": "State and Territory Governments", "Provider": "Government Grants and Contracts", "Service Type": "Telephone Counselling, Self-help, and Online Based Support Service/Program", "Service Sector": "Psychosocial Support Services", "_path_id": "57"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Private Partners/Sponsors", "Service Type": "Telephone Counselling, Self-help, and Online Based Support Service/Program", "Service Sector": "Psychosocial Support Services", "_path_id": "59"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Community Donations and Philanthropy", "Service Type": "Veteran Clinical Mental Health Service", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "61"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Defense", "Service Type": "Veteran Clinical Mental Health Service", "Service Sector": "Jurisdictional clinical ambulatory mental health services", "_path_id": "60"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Community Donations and Philanthropy", "Service Type": "Veteran Online Support Service/Program", "Service Sector": "Psychosocial Support Services", "_path_id": "65"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Veteran Affairs", "Service Type": "Veteran Online Support Service/Program", "Service Sector": "Psychosocial Support Services", "_path_id": "62"}, {"Major Funder": "Commonwealth Government", "Provider": "Government Grants and Contracts", "Service Type": "Veteran Online Support Service/Program", "Service Sector": "Psychosocial Support Services", "_path_id": "63"}, {"Major Funder": "State and Territory Governments", "Provider": "Government Grants and Contracts", "Service Type": "Veteran Online Support Service/Program", "Service Sector": "Psychosocial Support Services", "_path_id": "64"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Non-For-Porfit Ex-Serving Organisation", "Service Type": "Veteran Online Support Service/Program", "Service Sector": "Psychosocial Support Services", "_path_id": "66"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Community Donations and Philanthropy", "Service Type": "Veteran Psychosocial Support and Wellbeing Service/Program", "Service Sector": "Psychosocial Support Services", "_path_id": "70"}, {"Major Funder": "Commonwealth Government", "Provider": "Department of Veteran Affairs", "Service Type": "Veteran Psychosocial Support and Wellbeing Service/Program", "Service Sector": "Psychosocial Support Services", "_path_id": "67"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Non-For-Porfit Ex-Serving Organisation", "Service Type": "Veteran Psychosocial Support and Wellbeing Service/Program", "Service Sector": "Psychosocial Support Services", "_path_id": "71"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Private Partners/Sponsors", "Service Type": "Veteran Psychosocial Support and Wellbeing Service/Program", "Service Sector": "Psychosocial Support Services", "_path_id": "72"}, {"Major Funder": "Commonwealth Government", "Provider": "Universities", "Service Type": "Veteran Psychosocial Support and Wellbeing Service/Program", "Service Sector": "Psychosocial Support Services", "_path_id": "68"}, {"Major Funder": "Private, Non-for-Profit, and Community Sectors", "Provider": "Universities", "Service Type": "Veteran Psychosocial Support and Wellbeing Service/Program", "Service Sector": "Psychosocial Support Services", "_path_id": "69"}];
+const LEVELS = ["Major Funder", "Provider", "Service Type", "Service Sector"];
+const NODE_COLOR = {"Major Funder::Commonwealth Government": "hsla(23.0,92%,42%,0.90)", "Major Funder::Private, Non-for-Profit, and Community Sectors": "hsla(263.0,96%,60%,0.90)", "Major Funder::State and Territory Governments": "hsla(143.0,94%,74%,0.90)", "Provider::Attorney General’s Department": "hsla(120.0,86%,60%,0.90)", "Provider::Community Donations and Philanthropy": "hsla(5.5,88%,74%,0.90)", "Provider::Consumer Out-of-Pocket": "hsla(250.9,92%,52%,0.90)", "Provider::Department of Defense": "hsla(136.4,96%,68%,0.90)", "Provider::Department of Health, Disability, and Ageing": "hsla(21.8,94%,42%,0.90)", "Provider::Department of Infrastructure, Transport, Regional Development, Communications and the Arts": "hsla(267.3,86%,60%,0.90)", "Provider::Department of Social Services": "hsla(152.7,88%,74%,0.90)", "Provider::Department of Veteran Affairs": "hsla(38.2,92%,52%,0.90)", "Provider::Government Grants and Contracts": "hsla(283.6,96%,68%,0.90)", "Provider::Indigenous Australians Health Programme": "hsla(169.1,94%,42%,0.90)", "Provider::Local Hospital Networks": "hsla(54.5,86%,60%,0.90)", "Provider::Medicare Benefits Scheme": "hsla(300.0,88%,74%,0.90)", "Provider::National Disability Insurance Agency": "hsla(185.5,92%,52%,0.90)", "Provider::Non-For-Porfit Ex-Serving Organisation": "hsla(70.9,96%,68%,0.90)", "Provider::Pharmaceutical Benefits Scheme": "hsla(316.4,94%,42%,0.90)", "Provider::Primary Health Networks": "hsla(201.8,86%,60%,0.90)", "Provider::Private Insurers": "hsla(87.3,88%,74%,0.90)", "Provider::Private Partners/Sponsors": "hsla(332.7,92%,52%,0.90)", "Provider::State and Territory Department of Health": "hsla(218.2,96%,68%,0.90)", "Provider::State and Territory Department of Justice": "hsla(103.6,94%,42%,0.90)", "Provider::State and Territory Emergency Services": "hsla(349.1,86%,60%,0.90)", "Provider::Universities": "hsla(234.5,88%,74%,0.90)", "Service Type::Aboriginal Community Controlled Health Services": "hsla(217.0,96%,74%,0.90)", "Service Type::Access to Allied Psychological Services (ATAPS)": "hsla(77.0,94%,52%,0.90)", "Service Type::Australian Defence Force Telephone Counselling, Self-help, and Online based Crisis Services": "hsla(297.0,86%,68%,0.90)", "Service Type::Community-based Mental Health Services": "hsla(157.0,88%,42%,0.90)", "Service Type::Emergency Service Connection": "hsla(17.0,92%,60%,0.90)", "Service Type::General Practitioner": "hsla(237.0,96%,74%,0.90)", "Service Type::Headspace": "hsla(97.0,94%,52%,0.90)", "Service Type::Hospital Admitted Mental Health Care": "hsla(317.0,86%,68%,0.90)", "Service Type::Hospital Non-admitted/Outpatient": "hsla(177.0,88%,42%,0.90)", "Service Type::Legal and Complaints Service": "hsla(37.0,92%,60%,0.90)", "Service Type::Mental Health Day Programs": "hsla(257.0,96%,74%,0.90)", "Service Type::Open Arms": "hsla(117.0,94%,52%,0.90)", "Service Type::Prescription Medication†": "hsla(337.0,86%,68%,0.90)", "Service Type::Residential Mental Health Care": "hsla(197.0,88%,42%,0.90)", "Service Type::Telephone Counselling, Self-help, and Online Based Support Service/Program": "hsla(57.0,92%,60%,0.90)", "Service Type::Veteran Clinical Mental Health Service": "hsla(277.0,96%,74%,0.90)", "Service Type::Veteran Online Support Service/Program": "hsla(137.0,94%,52%,0.90)", "Service Type::Veteran Psychosocial Support and Wellbeing Service/Program": "hsla(357.0,86%,68%,0.90)", "Service Sector::Bed-based Service": "hsla(314.0,88%,52%,0.90)", "Service Sector::Jurisdictional clinical ambulatory mental health services": "hsla(254.0,92%,68%,0.90)", "Service Sector::Not Classified": "hsla(194.0,96%,42%,0.90)", "Service Sector::Pharmaceutical / Medicines Supply Service": "hsla(134.0,94%,60%,0.90)", "Service Sector::Primary care and private clinical ambulatory services": "hsla(74.0,86%,74%,0.90)", "Service Sector::Psychosocial Support Services": "hsla(14.0,88%,52%,0.90)"};
+
+const state = {
+  filters: Object.fromEntries(LEVELS.map(l => [l, new Set()])),
+  search: Object.fromEntries(LEVELS.map(l => [l, ""])),
+  hovered: null,
+  selected: null,
+  view: "collapsed",
+  pathSel: Object.fromEntries(LEVELS.map(l => [l, null])),
+  lastClick: null,
+  isPointerDown: false
+};
+
+
+const uniq = (arr) => Array.from(new Set(arr));
+const lvlIndex = (lvl) => LEVELS.indexOf(lvl);
+
+function matchesFilters(row){
+  for (const lvl of LEVELS){
+    const set = state.filters[lvl];
+    if (set.size === 0) continue;
+    if (!set.has(row[lvl])) return false;
+  }
+  return true;
+}
+function getFilteredRows(){ return RAW.filter(matchesFilters); }
+
+function setOptions(){
+  for (const lvl of LEVELS) {
+    const saved = new Set(state.filters[lvl]);
+    state.filters[lvl] = new Set();
+    const rows = getFilteredRows();
+    const opts = uniq(rows.map(r => r[lvl])).sort((a,b)=>a.localeCompare(b));
+    state.filters[lvl] = saved;
+
+    const q = (state.search[lvl] || "").trim().toLowerCase();
+    const filteredOpts = q ? opts.filter(o => o.toLowerCase().includes(q)) : opts;
+
+    const sel = document.getElementById("sel_" + lvlIndex(lvl));
+    const currentSelected = new Set(Array.from(sel.selectedOptions).map(o=>o.value));
+    sel.innerHTML = "";
+    for (const o of filteredOpts) {
+      const opt = document.createElement("option");
+      opt.value = o;
+      opt.textContent = o;
+      if (saved.has(o) || currentSelected.has(o)) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+}
+
+function readSelections(){
+  for (const lvl of LEVELS) {
+    const sel = document.getElementById("sel_" + lvlIndex(lvl));
+    state.filters[lvl] = new Set(Array.from(sel.selectedOptions).map(o=>o.value));
+  }
+}
+
+function updateBadges(){
+  const rows = getFilteredRows();
+  const uniquePaths = new Set(rows.map(r => r._path_id));
+  document.getElementById("kpi_rows").textContent = rows.length.toString();
+  document.getElementById("kpi_paths").textContent = uniquePaths.size.toString();
+
+  const pills = document.getElementById("activePills");
+  pills.innerHTML = "";
+  for (const lvl of LEVELS){
+    if (state.filters[lvl].size === 0) continue;
+    const pill = document.createElement("span");
+    pill.className = "pill";
+    pill.textContent = lvl + ": " + state.filters[lvl].size;
+    pills.appendChild(pill);
+  }
+  if (!pills.children.length) {
+    const pill = document.createElement("span");
+    pill.className = "pill";
+    pill.textContent = "No slicers selected";
+    pills.appendChild(pill);
+  }
+}
+
+function nodeId(lvl, label){ return lvl + "::" + label; }
+function nodeColor(id){ return NODE_COLOR[id] || "rgb(148,163,184)"; }
+function labelTrunc(s, max=44){ return (s.length <= max) ? s : (s.slice(0, max-1) + "…"); }
+
+function buildGraph(rows){
+  const nodesByLevel = Object.fromEntries(LEVELS.map(l => [l, new Map()]));
+  const nodePaths = new Map();
+  const edgePaths = new Map();
+
+  function addNode(lvl, label){
+    const id = nodeId(lvl, label);
+    if (!nodesByLevel[lvl].has(id)) {
+      nodesByLevel[lvl].set(id, {id, lvl, label});
+      nodePaths.set(id, new Set());
+    }
+    return id;
+  }
+  function addEdge(aId, bId, pathId){
+    const key = aId + "->" + bId;
+    if (!edgePaths.has(key)) edgePaths.set(key, new Set());
+    edgePaths.get(key).add(pathId);
+  }
+
+  for (const r of rows){
+    const p = r._path_id;
+    let prev = null;
+    for (const lvl of LEVELS){
+      const id = addNode(lvl, r[lvl]);
+      nodePaths.get(id).add(p);
+      if (prev) addEdge(prev, id, p);
+      prev = id;
+    }
+  }
+
+  const nodes = [];
+  for (const lvl of LEVELS){
+    for (const n of nodesByLevel[lvl].values()){
+      n.count = nodePaths.get(n.id).size;
+      nodes.push(n);
+    }
+  }
+
+  const edges = [];
+  for (const [k, set] of edgePaths.entries()){
+    const parts = k.split("->");
+    edges.push({from: parts[0], to: parts[1], count: set.size, key: k});
+  }
+
+  const outAdj = new Map();
+  const inAdj = new Map();
+  for (const n of nodes){ outAdj.set(n.id, new Set()); inAdj.set(n.id, new Set()); }
+  for (const e of edges){ outAdj.get(e.from).add(e.to); inAdj.get(e.to).add(e.from); }
+
+  return {nodes, edges, outAdj, inAdj};
+}
+
+function visibleSubgraph(graph){
+  if (state.view === "expanded") {
+    return {visNodes: new Set(graph.nodes.map(n=>n.id)), visEdges: new Set(graph.edges.map(e=>e.key))};
+  }
+  const visNodes = new Set();
+  const visEdges = new Set();
+  for (const n of graph.nodes) if (n.lvl === LEVELS[0]) visNodes.add(n.id);
+  for (let i=0;i<LEVELS.length-1;i++) {
+    const curLvl = LEVELS[i];
+    const nextLvl = LEVELS[i+1];
+    const sel = state.pathSel[curLvl];
+    if (!sel) break;
+    visNodes.add(sel);
+    for (const nxt of (graph.outAdj.get(sel) || [])) {
+      if (nxt.startsWith(nextLvl + "::")) {
+        visNodes.add(nxt);
+        visEdges.add(sel + "->" + nxt);
+      }
+    }
+  }
+  return {visNodes, visEdges};
+}
+
+function computeHighlight(graph, focusId){
+  if (!focusId) return null;
+  const keepNodes = new Set([focusId]);
+  const keepEdges = new Set();
+  const q1 = [focusId];
+  while(q1.length) {
+    const cur = q1.shift();
+    for (const nxt of (graph.outAdj.get(cur) || [])) {
+      keepEdges.add(cur + "->" + nxt);
+      if (!keepNodes.has(nxt)) { keepNodes.add(nxt); q1.push(nxt); }
+    }
+  }
+  const q2 = [focusId];
+  while(q2.length) {
+    const cur = q2.shift();
+    for (const prv of (graph.inAdj.get(cur) || [])) {
+      keepEdges.add(prv + "->" + cur);
+      if (!keepNodes.has(prv)) { keepNodes.add(prv); q2.push(prv); }
+    }
+  }
+  return {keepNodes, keepEdges};
+}
+
+function layout(graph, vis){
+  const nodeW = 300, nodeH = 36, gapY = 14, gapX = 420;
+  const padX = 120, padY = 100;
+
+  const arrByLevel = LEVELS.map(lvl =>
+    graph.nodes.filter(n => n.lvl===lvl && vis.visNodes.has(n.id)).sort((a,b)=>a.label.localeCompare(b.label))
+  );
+  const colHeights = arrByLevel.map(arr => arr.length ? (arr.length*nodeH + (arr.length-1)*gapY) : 0);
+  const maxH = Math.max(...colHeights, nodeH);
+
+  const contentW = (LEVELS.length-1)*gapX + nodeW;
+  const canvasW = contentW + padX*2;
+  const canvasH = maxH + padY*2;
+
+  const startX = (canvasW - contentW)/2;
+  const startY = (canvasH - maxH)/2;
+
+  const xByLevel = new Map();
+  LEVELS.forEach((lvl, i)=> xByLevel.set(lvl, startX + i*gapX));
+
+  const nodesPos = new Map();
+  LEVELS.forEach((lvl, i)=>{
+    const arr = arrByLevel[i];
+    const colH = colHeights[i] || 0;
+    let y = startY + (maxH - colH)/2; // center within column
+    for (const n of arr) {
+      nodesPos.set(n.id, {x:xByLevel.get(lvl), y:y, w:nodeW, h:nodeH});
+      y += nodeH + gapY;
+    }
+  });
+
+  return {nodesPos, width:canvasW, height:canvasH, xByLevel, headerY:startY - 18};
+}
+
+let rafPending = false;
+function renderSoon(){ 
+  if (rafPending) return;
+  rafPending = true;
+  requestAnimationFrame(()=>{ rafPending=false; render(); });
+}
+
+function render(){ 
+  const rows = getFilteredRows();
+  const graph = buildGraph(rows);
+  const vis = visibleSubgraph(graph);
+  const lay = layout(graph, vis);
+
+  const svg = document.getElementById("viz");
+  svg.setAttribute("width", lay.width);
+  svg.setAttribute("height", lay.height);
+  svg.setAttribute("viewBox", `0 0 ${lay.width} ${lay.height}`);
+  svg.innerHTML = "";
+
+  const bg = document.createElementNS("http://www.w3.org/2000/svg","rect");
+  bg.setAttribute("x",0); bg.setAttribute("y",0); bg.setAttribute("width",lay.width); bg.setAttribute("height",lay.height);
+  bg.setAttribute("fill","transparent");
+  bg.style.pointerEvents="all";
+  bg.addEventListener("pointerdown", ()=>{ state.selected=null; state.lastClick="background"; renderSoon(); });
+  svg.appendChild(bg);
+
+  const focus = state.selected || state.hovered;
+  const hl = computeHighlight(graph, focus);
+
+  for (let i=0;i<LEVELS.length;i++) {
+    const lvl = LEVELS[i];
+    const x = lay.xByLevel.get(lvl);
+    const t = document.createElementNS("http://www.w3.org/2000/svg","text");
+    t.setAttribute("x", x);
+    t.setAttribute("y", lay.headerY);
+    t.setAttribute("class","colHeader");
+    t.textContent = lvl;
+    svg.appendChild(t);
+  }
+
+  for (const e of graph.edges) {
+    if (!vis.visNodes.has(e.from) || !vis.visNodes.has(e.to)) continue;
+    if (state.view==="collapsed" && !vis.visEdges.has(e.key)) continue;
+    const a = lay.nodesPos.get(e.from), b=lay.nodesPos.get(e.to);
+    if (!a||!b) continue;
+    const x1=a.x+a.w, y1=a.y+a.h/2, x2=b.x, y2=b.y+b.h/2, mid=(x1+x2)/2;
+    const d=`M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`;
+    const path=document.createElementNS("http://www.w3.org/2000/svg","path");
+    const faded=(hl && !hl.keepEdges.has(e.key));
+    path.setAttribute("d", d);
+    path.setAttribute("class", "edge" + (faded ? " faded" : ""));
+    path.setAttribute("stroke-opacity", faded ? "0.12" : "0.90");
+    path.setAttribute("stroke", nodeColor(e.from));
+    path.style.pointerEvents="none";
+    svg.appendChild(path);
+  }
+
+  for (const n of graph.nodes) {
+    if (!vis.visNodes.has(n.id)) continue;
+    const pos=lay.nodesPos.get(n.id);
+    if (!pos) continue;
+    const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+    const faded=(hl && !hl.keepNodes.has(n.id));
+    const active=(focus===n.id);
+    g.setAttribute("class","node" + (faded ? " faded" : "") + (active ? " active" : ""));
+    g.style.pointerEvents="all";
+
+    const rect=document.createElementNS("http://www.w3.org/2000/svg","rect");
+    rect.setAttribute("x",pos.x); rect.setAttribute("y",pos.y); rect.setAttribute("width",pos.w); rect.setAttribute("height",pos.h);
+    rect.setAttribute("fill", nodeColor(n.id));
+    rect.style.pointerEvents="all";
+    g.appendChild(rect);
+
+    const text=document.createElementNS("http://www.w3.org/2000/svg","text");
+    text.setAttribute("x",pos.x+10); text.setAttribute("y",pos.y+23);
+    text.textContent = labelTrunc(n.label) + "  (" + n.count + ")";
+    g.appendChild(text);
+
+    g.addEventListener("pointerenter", ()=>{ if (state.isPointerDown) return; state.hovered=n.id; renderSoon(); });
+    g.addEventListener("pointerleave", ()=>{ if (state.isPointerDown) return; state.hovered=null; renderSoon(); });
+
+    g.addEventListener("pointerdown", (ev)=>{
+      ev.preventDefault();
+      ev.stopPropagation();
+      state.isPointerDown = true;
+      state.lastClick = n.id;
+      state.selected = (state.selected===n.id) ? null : n.id;
+      if (state.view==="collapsed") {
+        state.pathSel[n.lvl] = (state.pathSel[n.lvl]===n.id) ? null : n.id;
+        const idx = lvlIndex(n.lvl);
+        for (let j=idx+1;j<LEVELS.length;j++) state.pathSel[LEVELS[j]] = null;
+      }
+      renderSoon();
+    });
+
+    g.addEventListener("pointerup", ()=>{ state.isPointerDown = false; });
+    g.addEventListener("pointercancel", ()=>{ state.isPointerDown = false; });
+
+    svg.appendChild(g);
+  }
+
+  document.getElementById("viewLabel").textContent = (state.view==="expanded") ? "Fully expanded view (all pathways)" : "Collapsed view (drill)";
+  document.getElementById("hint").textContent = (state.view==="expanded")
+    ? "Fully expanded: hover highlights in/out; press on a node to lock highlight; use slicers to filter."
+    : "Collapsed: press on a node to reveal connected nodes in the next column.";
+  }
+
+function buildSlicers() {
+  const wrap = document.getElementById("slicerWrap");
+  wrap.innerHTML = "";
+  LEVELS.forEach((lvl, idx)=>{
+    const div = document.createElement("div");
+    div.innerHTML = `
+      <div>
+        <label>${lvl} (search + multi-select)</label>
+        <input id="q_${idx}" type="search" placeholder="Search ${lvl}..."/>
+        <select id="sel_${idx}" multiple></select>
+      </div>
+    `;
+    wrap.appendChild(div);
+  });
+
+  LEVELS.forEach((lvl, idx)=>{
+    const sel = document.getElementById("sel_" + idx);
+    for (const o of uniq(RAW.map(r=>r[lvl])).sort((a,b)=>a.localeCompare(b))) {
+      const opt = document.createElement("option");
+      opt.value=o; opt.textContent=o;
+      sel.appendChild(opt);
+    }
+    sel.addEventListener("change", ()=>{
+      readSelections();
+      setOptions();
+      for (const l of LEVELS) state.pathSel[l] = null;
+      state.selected = null;
+      state.lastClick = "slicer-change";
+      renderSoon();
+      updateBadges();
+    });
+    document.getElementById("q_" + idx).addEventListener("input", (e)=>{
+      state.search[lvl] = e.target.value || "";
+      setOptions();
+    });
+  });
+}
+
+function resetCollapsed(){ state.view="collapsed"; for (const l of LEVELS) state.pathSel[l]=null; state.selected=null; state.hovered=null; state.lastClick=null; renderSoon(); }
+function setExpanded(){ state.view="expanded"; for (const l of LEVELS) state.pathSel[l]=null; state.selected=null; state.hovered=null; state.lastClick=null; renderSoon(); }
+function clearAll(){ 
+  for (const l of LEVELS){ 
+    state.filters[l]=new Set(); 
+    state.search[l]=""; 
+    const q = document.getElementById("q_"+lvlIndex(l)); if (q) q.value="";
+  } 
+  resetCollapsed(); 
+  setOptions(); 
+  updateBadges(); 
+}
+
+document.getElementById("collapsedBtn").addEventListener("click", resetCollapsed);
+document.getElementById("expandedBtn").addEventListener("click", setExpanded);
+document.getElementById("clearBtn").addEventListener("click", clearAll);
+
+buildSlicers();
+setOptions();
+render();
+updateBadges();
+</script>
+</body>
+</html>
